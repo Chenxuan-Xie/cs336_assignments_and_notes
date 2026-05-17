@@ -8,7 +8,7 @@ from pretokenization_example import find_chunk_boundaries
 import time
 
 
-# 预编译正则
+# 预编译正则表达式，re.compile 把正则编译成内部对象，后续每次调用 PAT.finditer() 都直接用编译结果，比每次传字符串快很多
 PAT = re.compile(r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
 
 
