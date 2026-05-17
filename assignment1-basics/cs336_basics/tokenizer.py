@@ -239,7 +239,8 @@ class BPEtokenizer:
         word_counts = self.counting_init(input_path, special_tokens, num_chunks = 1000)
         print(f"finish word counting")
 
-        # 在最前面加上special_tokens 
+        # 在最前面加上special_tokens
+        # 统计实际需要合并的次数，目标词表大小减去已有的部分
         actual_merge_steps = vocab_size - 256 - len(special_tokens)
 
         # 数pair（第一次）
@@ -253,6 +254,7 @@ class BPEtokenizer:
             if i % 10 == 0:
                 print(f"iteration {i}")
 
+        # 将特殊 token 放到最前面，从 ID0 开始，这是一个约定，特殊 token 优先级最高，放在 ID 最小的位置
         offset = len(special_tokens)
         new_vocab = {}
         
