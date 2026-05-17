@@ -304,25 +304,31 @@ class Tokenizer:
         self.byte_to_id = {v: k for k, v in self.vocab.items()}
         self.bpe_ranks = {pair: i for i, pair in enumerate(self.merges)}  # 查找表，否则直接merge遍历单词太慢
 
-
+    # @classmethod 表示这是类方法，第一个参数是 cls（类本身）而不是 self（实例）。作用是提供一种从文件创建对象的方式，不需要手动先读文件再传
     @classmethod
     def from_files(cls, vocab_filepath, merges_filepath, special_tokens=None):
 
+        # 读取vocab
         with open(vocab_filepath, "r", encoding = 'utf-8')as f:
             raw_vocab = json.load(f)
             # 转成 int: bytes
             vocab = {int(k): v.encode('utf-8') if isinstance(v, str) else bytes([v]) for k, v in raw_vocab.items()}
-            
+
+        # 读取merges，merges 文件每行存一条合并规则，格式是两个字节序列用空格分隔，每个字节序列里字节用逗号分隔
         merges = []
         with open(merges_filepath, "r", encoding = "utf-8") as f:
             for line in f:
                 line = line.strip()
                 parts = line.split()
                 if len(parts) == 2:
+                    # parts[0].split(',') 把 "116,104" 拆成 ["116", "104"]，map(int, ...) 转成整数，bytes(...) 转成 bytes：
+                    # "116,104" → ["116","104"] → [116,104] → b'th'
                     p0 = bytes(map(int, parts[0].split(',')))
                     p1 = bytes(map(int, parts[1].split(',')))
                     merges.append((p0, p1)) 
-        
+
+        # 用读取的数据创建并返回一个 Tokenizer 实例
+        # 等价于：Tokenizer.__init__(vocab, merges, special_tokens)
         return cls(vocab, merges, special_tokens)
 
 
@@ -343,13 +349,13 @@ class Tokenizer:
         final_ids = []
 
         for word in words:
-            # 整个单词就是一个Token，则直接查
             word_bytes = word.encode('utf-8')
+            # 整个单词就是一个Token，则直接查（特殊词也在这里进行处理）
             if word_bytes in self.byte_to_id:
                 final_ids.append(self.byte_to_id[word_bytes])
                 continue
             
-            # 拆成字节
+            # 拆成字节，因为BPE合并是从最小单元（单字节）开始，逐步合并成更大的token
             tokens = [bytes([b]) for b in word_bytes]
             
 
@@ -382,6 +388,7 @@ class Tokenizer:
         return final_ids
 
 
+    # encode_iterable 是流式版本的 encode，把"一次性处理所有文本"变成"逐段处理逐个产出"，让任意大小的文件都能用恒定内存处理
     def encode_iterable(self, iterable):
         for text in iterable:
             yield from self.encode(text)
