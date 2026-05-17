@@ -123,6 +123,8 @@ class BPEtokenizer:
     
 
 
+    # 将词里的目标字节替换成新token，然后动态更新字节对频率的计数
+    # word是当前要处理的词，是一个整数元组；count是这个词在语料库里出现的次数；pair是当前要合并的目标字节对
     def _replace_pair_and_pair_counts(self, word, count, pair, new_id):
         
         # 更新单词
@@ -157,6 +159,7 @@ class BPEtokenizer:
 
 
 
+    # 在训练开始的时候调用一次
     def pair_count(self, word_counts):
         # 第一次pair计数
         
