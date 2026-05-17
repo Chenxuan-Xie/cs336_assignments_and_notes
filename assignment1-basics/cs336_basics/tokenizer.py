@@ -9,16 +9,22 @@ import time
 
 
 # 预编译正则表达式，re.compile 把正则编译成内部对象，后续每次调用 PAT.finditer() 都直接用编译结果，比每次传字符串快很多
+# 这里的五个部分分别处理：缩写后缀（'ll, 've, 't , ‘s等）；连续字母（单词）；连续数字；连续标点符号；连续纯空格
 PAT = re.compile(r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
 
-
+# 预分词函数，这里的chunk就是普通要处理的字符串，special_tokens是特殊字符串
 def pre_tokenization(chunk, special_tokens)->list[str]:
-    if not special_tokens:
+    if not special_tokens: # 如果special_tokens是空的
         # 如果没有特殊 token，直接正则切词，不要用 re.split
-        return [m.group() for m in PAT.finditer(chunk)]
-    
+        # .finditer是正则对象方法，从左到右扫描字符串，每次找到一个匹配就产生一个匹配对象
+        # 所以下面这个就是用PAT扫描chunk，将每个匹配到的字符串收集成列表返回
+        return [m.group() for m in PAT.finditer(chunk)] 
+
+    # 按照长度排序特殊token
     sorted_special = sorted(special_tokens, key=len, reverse=True)
+    # 构造特殊token的正则，其中escape是为了对|、>、<这些特殊正则字符进行转义（比如在前面加上反斜杠），外面加上括号表示捕获组，在分割以后会把这些特殊的正则字符进行保留
     special_pat = "(" + "|".join(re.escape(t) for t in sorted_special) + ")"
+    # 在chunk里面找所有匹配special_pat的字符，按照这些位置分割chunk
     parts = re.split(special_pat, chunk)
     
     result = []
@@ -26,7 +32,7 @@ def pre_tokenization(chunk, special_tokens)->list[str]:
         if not part: continue
         if part in special_tokens:
             result.append(part)
-        else:
+        else: # 与special_tokens为空时处理逻辑一样
             matches = PAT.finditer(part)
             for m in matches:
                 result.append(m.group())
@@ -34,18 +40,18 @@ def pre_tokenization(chunk, special_tokens)->list[str]:
 
 
 
-def process_chunk(input_path, 
+def process_chunk(input_path,  # 语料库文件路径
                     start,
                     end,
                     special_tokens)-> dict[tuple[int, ...], int]:
         # 每个核的并行任务：(预分词)，encode，然后计数
 
-        with open(input_path, "rb") as f:
+        with open(input_path, "rb") as f: # with语句不需要再手动关闭文件了，rb表示以二进制模式读取，读出来的是bytes而不是字符串
             f.seek(start)
 
-            raw_data = f.read(end - start).replace(b"\r\n", b"\n")
+            raw_data = f.read(end - start).replace(b"\r\n", b"\n") # 这里的操作是bytes，所以用b
 
-            chunk = raw_data.decode("utf-8", errors="ignore")
+            chunk = raw_data.decode("utf-8", errors="ignore") # 解码，将bytes转换成普通字符串
             
             # 预分词
             chunk_split = pre_tokenization(chunk, special_tokens)
@@ -81,6 +87,7 @@ class BPEtokenizer:
         
     
 
+    # 把大文件按特殊 token 边界切成多块，用多进程并行统计每块的词频，最后合并成完整的词频字典返回
     def counting_init(self, input_path, 
               special_tokens, num_chunks = 1000
               ) -> dict[tuple[int, ...], int]:
@@ -98,6 +105,7 @@ class BPEtokenizer:
         print("start multiprocessing")
         num_cpu = multiprocessing.cpu_count()
         tasks = []
+        # 将分割好的段落放到tasks列表里
         for start, end in zip(boundaries[:-1], boundaries[1:]):
             tasks.append((input_path, start, end, special_tokens))
         
@@ -106,6 +114,7 @@ class BPEtokenizer:
 
         # 转成dict[bytes:int]
         final_counts = Counter()
+        # 每个进程返回自己的那块词频字典，主进程将他们全部加在一起
         for res in results:
             final_counts.update(res)
         
